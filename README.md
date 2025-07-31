@@ -1,14 +1,17 @@
-# ATEM RTMP Streaming Server
+# ATEM Ultra-Low Latency Streaming Server
 
-A lightweight server that receives H.264 streams from Blackmagic ATEM Mini Pro (via RTMP) and makes them viewable in web browsers using HLS.
+A high-performance server that receives H.264 streams from Blackmagic ATEM Mini Pro (via RTMP) and delivers ultra-low latency streaming to web browsers using optimized HLS.
 
 ## Features
 
 - Receives H.264/RTMP streams from ATEM Mini Pro (Custom URL mode)
-- Converts to HLS for browser playback (no transcoding - preserves original H.264)
-- Web-based video player with automatic reconnection
-- Low latency streaming (2-second HLS segments)
-- Detailed connection logging
+- Low latency HLS streaming (~4 seconds)
+- No transcoding - preserves original H.264 quality
+- Web-based video player with MSE support
+- 0.5-second HLS segments for minimal buffering
+- Automatic media cleanup on startup
+- Real-time ATEM streaming status via WebSocket
+- Automatic stream refresh when ATEM starts/stops streaming
 
 ## Prerequisites
 
@@ -50,7 +53,7 @@ bun run dev
 The server will start with:
 - RTMP server on port 1935
 - Web interface on port 3001
-- HLS server on port 8000
+- WebSocket server for real-time status updates
 
 2. Find your computer's IP address:
 ```bash
@@ -68,7 +71,9 @@ ifconfig | grep "inet " | grep -v 127.0.0.1
 
 4. View the stream:
    - Open Google Chrome to `http://localhost:3001`
-   - The player will automatically connect when the stream is available
+   - Click "Connect" to initialize the player
+   - The stream will automatically refresh when ATEM starts/stops streaming
+   - Real-time status shows "Receiving ATEM stream" or "No ATEM stream received"
 
 ## Network Setup
 
@@ -124,6 +129,5 @@ ATEM Mini Pro → RTMP/H.264 → Node Media Server → FFmpeg (copy) → HLS →
 ## Ports Used
 
 - `1935`: RTMP server
-- `3001`: Web interface
-- `8000`: HLS file server
+- `3001`: Web interface and WebSocket server
 

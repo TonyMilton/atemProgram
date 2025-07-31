@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ATEM Stream Viewer</title>
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.4.10/dist/hls.min.js"></script>
+    <title>ATEM FLV Stream</title>
     <style>
         body {
             margin: 0;
@@ -21,14 +20,21 @@
         }
         
         h1 {
-            margin-bottom: 30px;
+            margin-bottom: 10px;
         }
         
-        #video {
+        h3 {
+            margin-bottom: 30px;
+            color: #0f0;
+        }
+        
+        #videoContainer {
             width: 100%;
             max-width: 1000px;
-            height: auto;
+            height: 562px;
             background-color: #222;
+            border: 2px solid #333;
+            margin: 0 auto;
         }
         
         .controls {
@@ -49,6 +55,11 @@
             background-color: #555;
         }
         
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
         .status {
             margin-top: 20px;
             padding: 10px;
@@ -66,106 +77,280 @@
         .status.connecting {
             background-color: #5a4f27;
         }
+        
+        .stats {
+            margin-top: 20px;
+            font-family: monospace;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>ATEM Mini Pro Stream</h1>
         
-        <video id="video" controls autoplay muted>
-            Your browser does not support the video tag.
-        </video>
+        <div id="videoContainer"></div>
         
         <div class="controls">
-            <button onclick="startStream()">Start Stream</button>
-            <button onclick="stopStream()">Stop Stream</button>
-            <button onclick="toggleMute()">Toggle Mute</button>
+            <button id="connectBtn" onclick="connect()">Connect</button>
+            <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+            <button onclick="toggleAudio()">Toggle Audio</button>
         </div>
         
         <div id="status" class="status disconnected">
             Status: Disconnected
         </div>
+        
+        <div id="stats" class="stats"></div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <script>
-        const video = document.getElementById('video');
         const statusDiv = document.getElementById('status');
+        const statsDiv = document.getElementById('stats');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        
+        let video = null;
         let hls = null;
+        let startTime = 0;
+        let statusWs = null;
+        let lastStreamingStatus = null;
         
         function updateStatus(message, type) {
             statusDiv.textContent = `Status: ${message}`;
             statusDiv.className = `status ${type}`;
         }
         
-        function startStream() {
+        function updateStats() {
+            // Stats removed - will show stream status instead
+        }
+        
+        function connect() {
+            updateStatus('Connecting...', 'connecting');
+            statsDiv.textContent = '';
+            connectBtn.disabled = true;
+            
+            // Connect to status WebSocket
+            statusWs = new WebSocket('ws://localhost:3001/status');
+            
+            statusWs.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'atem_status') {
+                    // Check if status changed
+                    if (lastStreamingStatus !== null && lastStreamingStatus !== data.streaming) {
+                        // Status changed - refresh the stream
+                        if (data.streaming) {
+                            statsDiv.textContent = 'ATEM stream started - refreshing...';
+                        } else {
+                            statsDiv.textContent = 'ATEM stream stopped - refreshing...';
+                        }
+                        setTimeout(() => {
+                            if (video) {
+                                refreshStream();
+                            } else {
+                                console.log('Video element not ready for refresh, skipping');
+                                // Just update status if video not ready
+                                if (data.streaming) {
+                                    statsDiv.textContent = 'Receiving ATEM stream';
+                                } else {
+                                    statsDiv.textContent = 'No ATEM stream received';
+                                }
+                            }
+                        }, 3000);
+                    } else {
+                        // Status unchanged - just update display
+                        if (data.streaming) {
+                            statsDiv.textContent = 'Receiving ATEM stream';
+                        } else {
+                            statsDiv.textContent = 'No ATEM stream received';
+                        }
+                    }
+                    lastStreamingStatus = data.streaming;
+                }
+            };
+            
+            statusWs.onclose = () => {
+                statsDiv.textContent = 'Status connection lost';
+            };
+            
+            // Create video element  
+            video = document.createElement('video');
+            video.width = 1000;
+            video.height = 562;
+            video.style.width = '100%';
+            video.style.height = '100%';
+            video.controls = false;
+            video.autoplay = true;
+            video.muted = true;
+            video.playsInline = true;
+            
+            // Add video to container
+            const container = document.getElementById('videoContainer');
+            container.innerHTML = '';
+            container.appendChild(video);
+            
             if (Hls.isSupported()) {
                 hls = new Hls({
-                    debug: false,
-                    enableWorker: false,
-                    lowLatencyMode: true,
-                    backBufferLength: 90
+                    maxBufferLength: 1,        // 1 second max buffer
+                    maxMaxBufferLength: 2,     // 2 seconds absolute max
+                    liveSyncDurationCount: 1,  // Sync to 1 segment from live edge
+                    liveMaxLatencyDurationCount: 2, // Max 2 segments behind
+                    maxBufferSize: 1000000,    // 1MB max buffer size
+                    maxBufferHole: 0.1,        // Fill holes > 0.1s
+                    lowLatencyMode: true,      // Enable low latency mode
+                    backBufferLength: 2,       // Keep only 2 seconds of back buffer
+                    enableWorker: false,       // Disable worker to reduce console noise
+                    manifestLoadingTimeOut: 1000,    // 1 second timeout
+                    manifestLoadingMaxRetry: 10,     // More retries
+                    manifestLoadingRetryDelay: 500   // 500ms between retries
                 });
                 
-                const streamUrl = '/stream.m3u8';
-                
-                hls.loadSource(streamUrl);
+                hls.loadSource('/stream.m3u8');
                 hls.attachMedia(video);
                 
-                hls.on(Hls.Events.MANIFEST_PARSED, function() {
-                    updateStatus('Connected - Stream Ready', 'connected');
+                hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                    updateStatus('Stream loaded - playing', 'connected');
+                    startTime = Date.now();
+                    
                     video.play().catch(e => {
-                        console.log('Autoplay prevented:', e);
-                        updateStatus('Connected - Click to play', 'connected');
+                        // Autoplay failed, show unmute button
+                        updateStatus('Click to unmute and play', 'connecting');
+                        video.onclick = () => {
+                            video.muted = false;
+                            video.play();
+                            video.onclick = null;
+                            updateStatus('Stream loaded - playing', 'connected');
+                        };
                     });
                 });
                 
-                hls.on(Hls.Events.ERROR, function(event, data) {
-                    console.error('HLS Error:', data);
-                    updateStatus(`Error: ${data.details}`, 'disconnected');
+                hls.on(Hls.Events.ERROR, (event, data) => {
+                    if (data.type === 'networkError' && data.details === 'manifestLoadError') {
+                        updateStatus('Waiting for stream...', 'connecting');
+                    } else if (data.details === 'bufferStalledError' || 
+                               data.details === 'bufferAppendError' ||
+                               data.details === 'fragLoadError' ||
+                               data.details === 'fragParsingError') {
+                        // Ignore common streaming errors
+                    } else if (data.fatal) {
+                        console.error('Fatal HLS error:', data);
+                    }
                 });
-                
-                updateStatus('Connecting...', 'connecting');
                 
             } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                // Safari native HLS support
                 video.src = '/stream.m3u8';
-                video.addEventListener('loadedmetadata', function() {
-                    updateStatus('Connected - Stream Ready', 'connected');
+                video.addEventListener('loadedmetadata', () => {
+                    updateStatus('Stream loaded - playing', 'connected');
+                    startTime = Date.now();
                 });
-                video.addEventListener('error', function() {
-                    updateStatus('Connection Error', 'disconnected');
-                });
-                updateStatus('Connecting...', 'connecting');
-            } else {
-                updateStatus('HLS not supported in this browser', 'disconnected');
             }
+            
+            disconnectBtn.disabled = false;
         }
         
-        function stopStream() {
+        function disconnect() {
+            if (statusWs) {
+                statusWs.close();
+                statusWs = null;
+            }
             if (hls) {
                 hls.destroy();
                 hls = null;
             }
-            video.src = '';
-            updateStatus('Disconnected', 'disconnected');
-        }
-        
-        function toggleMute() {
-            video.muted = !video.muted;
-        }
-        
-        // Auto-start stream when page loads
-        window.addEventListener('load', function() {
-            setTimeout(startStream, 1000);
-        });
-        
-        // Retry connection every 5 seconds if disconnected
-        setInterval(function() {
-            if (!hls && statusDiv.classList.contains('disconnected')) {
-                console.log('Attempting to reconnect...');
-                startStream();
+            if (video) {
+                video.pause();
+                video.src = '';
+                video = null;
             }
-        }, 5000);
+            
+            document.getElementById('videoContainer').innerHTML = '';
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+            updateStatus('Disconnected', 'disconnected');
+            statsDiv.textContent = '';
+        }
+        
+        function refreshStream() {
+            console.log('refreshStream called, video exists:', !!video, 'hls exists:', !!hls);
+            
+            if (hls) {
+                hls.destroy();
+                hls = null;
+            }
+            if (video) {
+                video.pause();
+                video.src = '';
+            }
+            
+            // Recreate HLS connection only if video element exists
+            if (video && Hls.isSupported()) {
+                hls = new Hls({
+                    maxBufferLength: 1,
+                    maxMaxBufferLength: 2,
+                    liveSyncDurationCount: 1,
+                    liveMaxLatencyDurationCount: 2,
+                    maxBufferSize: 1000000,
+                    maxBufferHole: 0.1,
+                    lowLatencyMode: true,
+                    backBufferLength: 2,
+                    enableWorker: false,
+                    manifestLoadingTimeOut: 1000,
+                    manifestLoadingMaxRetry: 10,
+                    manifestLoadingRetryDelay: 500
+                });
+                
+                hls.loadSource('/stream.m3u8');
+                hls.attachMedia(video);
+                
+                hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                    updateStatus('Stream refreshed - playing', 'connected');
+                    // Update ATEM status to current state
+                    if (lastStreamingStatus) {
+                        statsDiv.textContent = 'Receiving ATEM stream';
+                    } else {
+                        statsDiv.textContent = 'No ATEM stream received';
+                    }
+                    video.play().catch(e => {
+                        updateStatus('Click to unmute and play', 'connecting');
+                        video.onclick = () => {
+                            video.muted = false;
+                            video.play();
+                            video.onclick = null;
+                            updateStatus('Stream refreshed - playing', 'connected');
+                        };
+                    });
+                });
+                
+                hls.on(Hls.Events.ERROR, (event, data) => {
+                    if (data.type === 'networkError' && data.details === 'manifestLoadError') {
+                        updateStatus('Waiting for stream...', 'connecting');
+                        // Update ATEM status to current state
+                        if (lastStreamingStatus) {
+                            statsDiv.textContent = 'Receiving ATEM stream';
+                        } else {
+                            statsDiv.textContent = 'No ATEM stream received';
+                        }
+                    } else if (data.fatal) {
+                        console.error('Fatal HLS error:', data);
+                    }
+                });
+            }
+        }
+        
+        function toggleAudio() {
+            if (video) {
+                video.muted = !video.muted;
+            }
+        }
+        
+        // Update stats every 200ms for real-time feedback
+        setInterval(updateStats, 200);
+        
+        // Auto-connect on load
+        window.addEventListener('load', () => {
+            setTimeout(connect, 1000);
+        });
     </script>
 </body>
 </html>
