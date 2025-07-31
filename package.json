@@ -1,0 +1,13 @@
+{
+  "name": "atem-rtmp-streamer",
+  "version": "1.0.0",
+  "description": "RTMP stream receiver for Blackmagic ATEM Mini Pro with web playback",
+  "main": "server.js",
+  "scripts": {
+    "start": "bun run server.js",
+    "dev": "bun --watch server.js"
+  },
+  "dependencies": {
+    "node-media-server": "^2.6.0"
+  }
+}
