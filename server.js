@@ -25,6 +25,17 @@ const server = http.createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/html' });
       res.end(data);
     });
+  } else if (req.url === '/style.css') {
+    const cssPath = path.join(__dirname, 'style.css');
+    fs.readFile(cssPath, (err, data) => {
+      if (err) {
+        res.writeHead(404);
+        res.end('CSS file not found');
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'text/css' });
+      res.end(data);
+    });
   } else if (req.url === '/stream.m3u8') {
     const m3u8Path = path.join(__dirname, 'media', 'stream.m3u8');
     fs.readFile(m3u8Path, (err, data) => {

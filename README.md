@@ -1,13 +1,19 @@
 # ATEM Mini Pro Streaming Control Server
 
-A Node.js server that provides ethernet-based control of Blackmagic ATEM Mini Pro streaming and receives RTMP streams for ultra-low latency web playback.
+A modern Node.js server with beautiful Tailwind CSS interface that provides ethernet-based control of Blackmagic ATEM Mini Pro streaming and receives RTMP streams for ultra-low latency web playback.
 
 ## Features
+
+### Modern Web Interface
+- **Beautiful Tailwind CSS v4 design** with responsive layout
+- **Video-centered layout** with controls in right sidebar
+- **Professional status indicators** with colored dots and real-time updates
+- **Optimized for full-screen viewing** with maximum video real estate
+- **Dark theme** optimized for streaming environments
 
 ### ATEM Ethernet Control
 - **Direct ethernet communication** with ATEM Mini Pro (port 9993)
 - **Start/Stop streaming** buttons in web interface
-- **Real-time connection status** monitoring
 - **Remote streaming control** without physical access to device
 
 ### RTMP Stream Reception & Web Playback
@@ -22,6 +28,7 @@ A Node.js server that provides ethernet-based control of Blackmagic ATEM Mini Pr
 ## Prerequisites
 
 - [Bun](https://bun.sh/) runtime
+- [Node.js](https://nodejs.org/) (for Vite development server)
 - [FFmpeg](https://ffmpeg.org/) installed and accessible
 - Blackmagic ATEM Mini Pro
 - Latest version of Google Chrome (for viewing the stream)
@@ -59,15 +66,43 @@ If FFmpeg is not installed:
 
 ## Usage
 
-1. Start the server:
+### Development Mode (Recommended)
+
+1. Start the backend server:
 ```bash
 bun run start
 ```
 
+2. In a separate terminal, start the Vite development server:
+```bash
+npm run dev-frontend
+```
+
+This will run:
+- **Backend server** on port 3001 (ATEM control, RTMP, API)
+- **Frontend server** on port 5173 (Vite dev server with hot reload)
+- **Automatic proxy** from frontend to backend for API calls
+
+3. Access the modern interface at `http://localhost:5173`
+
+### Production Mode
+
+1. Build the frontend:
+```bash
+npm run build
+```
+
+2. Start the server:
+```bash
+bun run start
+```
+
+3. Access the interface at `http://localhost:3001`
+
 The server will start with:
 - **ATEM streaming control** connection (port 9993)
 - **RTMP server** on port 1935
-- **Web interface** on port 3001
+- **Web interface** on port 3001 (or 5173 in dev mode)
 - **WebSocket server** for real-time status updates
 
 2. Configure your ATEM Mini Pro streaming destination:

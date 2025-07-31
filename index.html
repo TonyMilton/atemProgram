@@ -4,113 +4,69 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ATEM Program Stream</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 20px;
-            font-family: Arial, sans-serif;
-            background-color: #000;
-            color: #fff;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            text-align: center;
-        }
-        
-        h1 {
-            margin-bottom: 10px;
-        }
-        
-        h3 {
-            margin-bottom: 30px;
-            color: #0f0;
-        }
-        
-        #videoContainer {
-            width: 100%;
-            max-width: 1000px;
-            height: 562px;
-            background-color: #222;
-            border: 2px solid #333;
-            margin: 0 auto;
-        }
-        
-        .controls {
-            margin-top: 20px;
-        }
-        
-        button {
-            padding: 10px 20px;
-            margin: 0 5px;
-            background-color: #333;
-            color: #fff;
-            border: 1px solid #555;
-            cursor: pointer;
-            border-radius: 4px;
-        }
-        
-        button:hover {
-            background-color: #555;
-        }
-        
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        
-        .status {
-            margin-top: 20px;
-            padding: 10px;
-            border-radius: 4px;
-        }
-        
-        .status.connected {
-            background-color: #2d5a27;
-        }
-        
-        .status.disconnected {
-            background-color: #5a2727;
-        }
-        
-        .status.connecting {
-            background-color: #5a4f27;
-        }
-        
-        .stats {
-            margin-top: 20px;
-            font-family: monospace;
-            font-size: 14px;
-        }
-    </style>
+    <link rel="stylesheet" href="/style.css">
 </head>
-<body>
-    <div class="container">
-        <h1>ATEM Mini Pro Stream</h1>
-        
-        <div id="videoContainer"></div>
-        
-        <div class="controls">
-            <button id="connectBtn" onclick="connect()">Connect</button>
-            <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
-            <button onclick="toggleAudio()">Toggle Audio</button>
-        </div>
-        
-        <div class="atem-controls" style="margin-top: 20px; padding: 20px; border: 1px solid #555; border-radius: 4px;">
-            <h3>ATEM Stream Control</h3>
-            <button id="startStreamBtn" onclick="startATEMStream()">Start Stream</button>
-            <button id="stopStreamBtn" onclick="stopATEMStream()">Stop Stream</button>
-            <div id="atemStatus" class="status disconnected" style="margin-top: 10px;">
-                ATEM Status: Disconnected
+<body class="min-h-screen bg-black text-white font-sans">
+    <div class="flex h-screen">
+        <!-- Main video area -->
+        <div class="flex-1 flex flex-col p-6">
+            <!-- Header -->
+            <div class="mb-6">
+                <h1 class="text-4xl font-bold text-center mb-2">ATEM Mini Pro Stream</h1>
+                <div id="stats" class="text-center text-gray-400 font-mono text-sm"></div>
+            </div>
+            
+            <!-- Video container - takes up remaining space -->
+            <div class="flex-1 flex items-center justify-center p-4">
+                <div id="videoContainer" class="w-full h-full bg-gray-900 border-2 border-gray-700 rounded-lg shadow-2xl overflow-hidden"></div>
             </div>
         </div>
         
-        <div id="status" class="status disconnected">
-            Status: Disconnected
+        <!-- Control panel -->
+        <div class="w-80 bg-gray-900 border-l border-gray-700 p-6 flex flex-col">
+            <!-- Top controls section -->
+            <div class="space-y-6">
+                <!-- Connection Controls -->
+                <div class="space-y-4">
+                    <h2 class="text-xl font-semibold text-gray-200 border-b border-gray-700 pb-2">Connection</h2>
+                    <div class="space-y-3">
+                        <button id="connectBtn" onclick="connect()" class="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors">
+                            Connect
+                        </button>
+                        <button id="disconnectBtn" onclick="disconnect()" disabled class="w-full px-4 py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors">
+                            Disconnect
+                        </button>
+                        <button onclick="toggleAudio()" class="w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors">
+                            Toggle Audio
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- ATEM Controls -->
+                <div class="space-y-4">
+                    <h2 class="text-xl font-semibold text-gray-200 border-b border-gray-700 pb-2">ATEM Stream Control</h2>
+                    <div class="space-y-3">
+                        <button id="startStreamBtn" onclick="startATEMStream()" class="w-full px-4 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors">
+                            Start Stream
+                        </button>
+                        <button id="stopStreamBtn" onclick="stopATEMStream()" class="w-full px-4 py-3 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors">
+                            Stop Stream
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Status section at bottom -->
+            <div class="mt-auto pt-6">
+                <div id="status" class="flex items-center justify-between px-3 py-2 bg-gray-800 border border-gray-600 rounded text-sm">
+                    <span class="text-gray-300">Stream Status:</span>
+                    <div class="flex items-center space-x-2">
+                        <div class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                        <span class="text-red-400 font-medium">Disconnected</span>
+                    </div>
+                </div>
+            </div>
         </div>
-        
-        <div id="stats" class="stats"></div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
@@ -131,8 +87,21 @@
         let atemConnected = false;
         
         function updateStatus(message, type) {
-            statusDiv.textContent = `Status: ${message}`;
-            statusDiv.className = `status ${type}`;
+            const dot = statusDiv.querySelector('.w-2.h-2');
+            const text = statusDiv.querySelector('span:last-child');
+            
+            text.textContent = message;
+            
+            if (type === 'connected') {
+                dot.className = 'w-2 h-2 bg-green-500 rounded-full';
+                text.className = 'text-green-400 font-medium';
+            } else if (type === 'connecting') {
+                dot.className = 'w-2 h-2 bg-yellow-500 rounded-full animate-pulse';
+                text.className = 'text-yellow-400 font-medium';
+            } else {
+                dot.className = 'w-2 h-2 bg-red-500 rounded-full animate-pulse';
+                text.className = 'text-red-400 font-medium';
+            }
         }
         
         function updateStats() {
@@ -144,8 +113,8 @@
             statsDiv.textContent = '';
             connectBtn.disabled = true;
             
-            // Connect to status WebSocket
-            statusWs = new WebSocket('ws://localhost:3001/status');
+            // Connect to status WebSocket (Vite proxy will handle this)
+            statusWs = new WebSocket('ws://localhost:5173/status');
             
             statusWs.onmessage = (event) => {
                 const data = JSON.parse(event.data);
@@ -194,14 +163,14 @@
             
             // Create video element  
             video = document.createElement('video');
-            video.width = 1000;
-            video.height = 562;
-            video.style.width = '100%';
-            video.style.height = '100%';
             video.controls = false;
             video.autoplay = true;
             video.muted = true;
             video.playsInline = true;
+            video.style.width = '95%';
+            video.style.height = '95%';
+            video.style.objectFit = 'contain';
+            video.style.borderRadius = '8px';
             
             // Add video to container
             const container = document.getElementById('videoContainer');
@@ -301,6 +270,14 @@
                 video.src = '';
             }
             
+            // Apply proper video styling
+            if (video) {
+                video.style.width = '95%';
+                video.style.height = '95%';
+                video.style.objectFit = 'contain';
+                video.style.borderRadius = '8px';
+            }
+            
             // Recreate HLS connection only if video element exists
             if (video && Hls.isSupported()) {
                 hls = new Hls({
@@ -363,8 +340,18 @@
         }
         
         function updateATEMStatus(message, type) {
-            atemStatusDiv.textContent = `ATEM Status: ${message}`;
-            atemStatusDiv.className = `status ${type}`;
+            const dot = atemStatusDiv.querySelector('.w-2.h-2');
+            const text = atemStatusDiv.querySelector('span:last-child');
+            
+            text.textContent = message;
+            
+            if (type === 'connected') {
+                dot.className = 'w-2 h-2 bg-green-500 rounded-full';
+                text.className = 'text-green-400 font-medium';
+            } else {
+                dot.className = 'w-2 h-2 bg-red-500 rounded-full';
+                text.className = 'text-red-400 font-medium';
+            }
         }
         
         async function startATEMStream() {
