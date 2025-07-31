@@ -1,9 +1,11 @@
+require('dotenv').config();
 const NodeMediaServer = require('node-media-server');
 const http = require('http');
 const WebSocket = require('ws');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const net = require('net');
 
 // HTTP server for the player page and HLS files
 const server = http.createServer((req, res) => {
@@ -50,6 +52,56 @@ const server = http.createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'video/mp2t' });
       res.end(data);
     });
+  } else if (req.url === '/api/atem/start-stream' && req.method === 'POST') {
+    // Start ATEM streaming
+    (async () => {
+      try {
+        // Connect to streaming port if not already connected
+        if (!streamingSocket) {
+          await connectToATEMStreaming();
+        }
+        
+        const streamUrl = process.env.STREAM_URL || 'rtmp://localhost:1935/live/stream';
+        const streamKey = process.env.STREAM_KEY || 'stream';
+        const command = `stream start: url: ${streamUrl} key: ${streamKey}`;
+        
+        await sendStreamingCommand(command);
+        console.log('[ATEM] Stream start command sent:', command);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, message: 'Stream start command sent' }));
+      } catch (error) {
+        console.error('[ATEM] Start streaming error:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: error.message }));
+      }
+    })();
+  } else if (req.url === '/api/atem/stop-stream' && req.method === 'POST') {
+    // Stop ATEM streaming
+    (async () => {
+      try {
+        // Connect to streaming port if not already connected
+        if (!streamingSocket) {
+          await connectToATEMStreaming();
+        }
+        
+        const command = 'stream stop';
+        await sendStreamingCommand(command);
+        console.log('[ATEM] Stream stop command sent:', command);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, message: 'Stream stop command sent' }));
+      } catch (error) {
+        console.error('[ATEM] Stop streaming error:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: error.message }));
+      }
+    })();
+  } else if (req.url === '/api/atem/status' && req.method === 'GET') {
+    // Get ATEM streaming status
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ 
+      streamingConnected: streamingSocket !== null,
+      ip: ATEM_IP
+    }));
   } else {
     res.writeHead(404);
     res.end('Not found');
@@ -104,6 +156,73 @@ const config = {
 
 const nms = new NodeMediaServer(config);
 let ffmpegProcess = null;
+
+// ATEM streaming connection setup
+let streamingSocket = null;
+const ATEM_IP = process.env.ATEM_IP;
+const ATEM_STREAMING_PORT = 9993;
+
+function connectToATEMStreaming() {
+  return new Promise((resolve, reject) => {
+    if (streamingSocket) {
+      streamingSocket.destroy();
+    }
+    
+    streamingSocket = new net.Socket();
+    
+    streamingSocket.connect(ATEM_STREAMING_PORT, ATEM_IP, () => {
+      console.log(`[ATEM Streaming] ✅ Connected to streaming port ${ATEM_STREAMING_PORT}`);
+      broadcastATEMStreamingStatus(true);
+      resolve();
+    });
+    
+    streamingSocket.on('data', (data) => {
+      console.log('[ATEM Streaming] Received:', data.toString());
+    });
+    
+    streamingSocket.on('error', (error) => {
+      console.error('[ATEM Streaming] Error:', error.message);
+      broadcastATEMStreamingStatus(false);
+      reject(error);
+    });
+    
+    streamingSocket.on('close', () => {
+      console.log('[ATEM Streaming] Connection closed');
+      broadcastATEMStreamingStatus(false);
+      streamingSocket = null;
+    });
+  });
+}
+
+function sendStreamingCommand(command) {
+  return new Promise((resolve, reject) => {
+    if (!streamingSocket) {
+      reject(new Error('Streaming socket not connected'));
+      return;
+    }
+    
+    streamingSocket.write(command + '\n', (error) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+function broadcastATEMStreamingStatus(connected) {
+  const message = JSON.stringify({ 
+    type: 'atem_streaming_connection', 
+    connected: connected 
+  });
+  
+  statusClients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(message);
+    }
+  });
+}
 
 // Clean up media directory on startup
 const mediaDir = path.join(__dirname, 'media');
@@ -207,11 +326,18 @@ server.listen(3001, () => {
 });
 
 nms.run();
+
+// Connect to ATEM streaming port on startup
+connectToATEMStreaming().catch(error => {
+  console.error('[ATEM Streaming] Failed to connect on startup:', error.message);
+});
+
 console.log('========================================');
 console.log('ATEM Ultra-Low Latency HLS Server');
 console.log('========================================');
 console.log('RTMP port: 1935');
 console.log('Web port: 3001');
 console.log('Stream URL: rtmp://YOUR_IP:1935/live/stream');
+console.log(`ATEM IP: ${ATEM_IP}`);
 console.log('Expected latency: ~4 seconds');
 console.log('========================================');

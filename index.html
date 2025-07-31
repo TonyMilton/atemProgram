@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ATEM FLV Stream</title>
+    <title>ATEM Program Stream</title>
     <style>
         body {
             margin: 0;
@@ -97,6 +97,15 @@
             <button onclick="toggleAudio()">Toggle Audio</button>
         </div>
         
+        <div class="atem-controls" style="margin-top: 20px; padding: 20px; border: 1px solid #555; border-radius: 4px;">
+            <h3>ATEM Stream Control</h3>
+            <button id="startStreamBtn" onclick="startATEMStream()">Start Stream</button>
+            <button id="stopStreamBtn" onclick="stopATEMStream()">Stop Stream</button>
+            <div id="atemStatus" class="status disconnected" style="margin-top: 10px;">
+                ATEM Status: Disconnected
+            </div>
+        </div>
+        
         <div id="status" class="status disconnected">
             Status: Disconnected
         </div>
@@ -110,12 +119,16 @@
         const statsDiv = document.getElementById('stats');
         const connectBtn = document.getElementById('connectBtn');
         const disconnectBtn = document.getElementById('disconnectBtn');
+        const atemStatusDiv = document.getElementById('atemStatus');
+        const startStreamBtn = document.getElementById('startStreamBtn');
+        const stopStreamBtn = document.getElementById('stopStreamBtn');
         
         let video = null;
         let hls = null;
         let startTime = 0;
         let statusWs = null;
         let lastStreamingStatus = null;
+        let atemConnected = false;
         
         function updateStatus(message, type) {
             statusDiv.textContent = `Status: ${message}`;
@@ -167,6 +180,11 @@
                         }
                     }
                     lastStreamingStatus = data.streaming;
+                } else if (data.type === 'atem_streaming_connection') {
+                    atemConnected = data.connected;
+                    updateATEMStatus(data.connected ? 'Streaming Port Connected' : 'Streaming Port Disconnected', data.connected ? 'connected' : 'disconnected');
+                    startStreamBtn.disabled = !data.connected;
+                    stopStreamBtn.disabled = !data.connected;
                 }
             };
             
@@ -341,6 +359,51 @@
         function toggleAudio() {
             if (video) {
                 video.muted = !video.muted;
+            }
+        }
+        
+        function updateATEMStatus(message, type) {
+            atemStatusDiv.textContent = `ATEM Status: ${message}`;
+            atemStatusDiv.className = `status ${type}`;
+        }
+        
+        async function startATEMStream() {
+            try {
+                startStreamBtn.disabled = true;
+                const response = await fetch('/api/atem/start-stream', { method: 'POST' });
+                const result = await response.json();
+                
+                if (response.ok) {
+                    console.log('Stream start command sent successfully');
+                } else {
+                    console.error('Failed to start stream:', result.error);
+                    alert('Failed to start stream: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error starting stream:', error);
+                alert('Error starting stream: ' + error.message);
+            } finally {
+                startStreamBtn.disabled = false;
+            }
+        }
+        
+        async function stopATEMStream() {
+            try {
+                stopStreamBtn.disabled = true;
+                const response = await fetch('/api/atem/stop-stream', { method: 'POST' });
+                const result = await response.json();
+                
+                if (response.ok) {
+                    console.log('Stream stop command sent successfully');
+                } else {
+                    console.error('Failed to stop stream:', result.error);
+                    alert('Failed to stop stream: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error stopping stream:', error);
+                alert('Error stopping stream: ' + error.message);
+            } finally {
+                stopStreamBtn.disabled = false;
             }
         }
         
