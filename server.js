@@ -106,6 +106,46 @@ const server = http.createServer((req, res) => {
         res.end(JSON.stringify({ error: error.message }));
       }
     })();
+  } else if (req.url === '/api/atem/start-record' && req.method === 'POST') {
+    // Start ATEM recording
+    (async () => {
+      try {
+        // Connect to streaming port if not already connected
+        if (!streamingSocket) {
+          await connectToATEMStreaming();
+        }
+        
+        const command = 'record';
+        await sendStreamingCommand(command);
+        console.log('[ATEM] Record start command sent:', command);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, message: 'Record start command sent' }));
+      } catch (error) {
+        console.error('[ATEM] Start recording error:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: error.message }));
+      }
+    })();
+  } else if (req.url === '/api/atem/stop-record' && req.method === 'POST') {
+    // Stop ATEM recording
+    (async () => {
+      try {
+        // Connect to streaming port if not already connected
+        if (!streamingSocket) {
+          await connectToATEMStreaming();
+        }
+        
+        const command = 'stop';
+        await sendStreamingCommand(command);
+        console.log('[ATEM] Record stop command sent:', command);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, message: 'Record stop command sent' }));
+      } catch (error) {
+        console.error('[ATEM] Stop recording error:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: error.message }));
+      }
+    })();
   } else if (req.url === '/api/atem/status' && req.method === 'GET') {
     // Get ATEM streaming status
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -188,7 +228,26 @@ function connectToATEMStreaming() {
     });
     
     streamingSocket.on('data', (data) => {
-      console.log('[ATEM Streaming] Received:', data.toString());
+      const response = data.toString().trim();
+      
+      
+      console.log('[ATEM Streaming] Received:', response);
+      
+      // Parse slot info response for recording status
+      if (response.includes('slot info:')) {
+        const lines = response.split('\n');
+        let recordingStatus = false;
+        
+        lines.forEach(line => {
+          if (line.includes('status:')) {
+            const status = line.split('status:')[1]?.trim();
+            recordingStatus = status === 'recording';
+            console.log('[ATEM] Recording status detected:', status, '-> recording:', recordingStatus);
+          }
+        });
+        
+        broadcastATEMRecordingStatus(recordingStatus);
+      }
     });
     
     streamingSocket.on('error', (error) => {
@@ -233,6 +292,35 @@ function broadcastATEMStreamingStatus(connected) {
       client.send(message);
     }
   });
+}
+
+function broadcastATEMRecordingStatus(recording) {
+  const message = JSON.stringify({ 
+    type: 'atem_recording_status', 
+    recording: recording 
+  });
+  
+  statusClients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(message);
+    }
+  });
+}
+
+// Function to query ATEM recording and streaming status
+async function queryATEMStatus() {
+  if (!streamingSocket) return;
+  
+  try {
+    // Query slot info to get recording status
+    streamingSocket.write('slot info\n');
+    
+    // Note: streaming status commands don't exist in ATEM ethernet protocol
+    // Only recording status is available via slot info
+    
+  } catch (error) {
+    console.error('[ATEM Status] Error querying status:', error);
+  }
 }
 
 // Clean up media directory on startup
@@ -292,6 +380,9 @@ nms.on('postPublish', (id, StreamPath, args) => {
   
   let lastLogTime = 0;
   ffmpegProcess.stderr.on('data', (data) => {
+    // FFmpeg logs are hidden to reduce console noise
+    // Uncomment below lines to enable FFmpeg logging for debugging
+    /*
     const now = Date.now();
     const output = data.toString();
     
@@ -304,6 +395,7 @@ nms.on('postPublish', (id, StreamPath, args) => {
     } else if (!output.includes('size=') && !output.includes('time=')) {
       console.log(`[FFmpeg] ${output.trim()}`);
     }
+    */
   });
   
   ffmpegProcess.on('close', (code) => {
@@ -342,6 +434,11 @@ nms.run();
 connectToATEMStreaming().catch(error => {
   console.error('[ATEM Streaming] Failed to connect on startup:', error.message);
 });
+
+// Poll ATEM recording status every 3 seconds using slot info
+setInterval(() => {
+  queryATEMStatus();
+}, 3000);
 
 console.log('========================================');
 console.log('ATEM Ultra-Low Latency HLS Server');
